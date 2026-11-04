@@ -10,12 +10,17 @@ import aiohttp
 
 from contenthive.plugins.context import PluginContext
 from contenthive.plugins.contracts import (
+    CoverStream,
+    ImageStream,
+    LinkStream,
     MediaType,
     ParserAuthorInfo,
     ParserMediaInfo,
     ParserPlatformInfo,
     ParserResult,
     ParserResultStatus,
+    VideoStream,
+    source_key_from_url,
 )
 
 from .const import (
@@ -165,45 +170,58 @@ class JikeParser:
             if live_photo and live_photo.get("videoUrl"):
                 media_list.append(
                     ParserMediaInfo(
-                        url=live_photo["videoUrl"],
+                        source_key=source_key_from_url(live_photo["videoUrl"]),
                         type=MediaType.LIVEPHOTO,
-                        cover=pic_url,
                         width=width,
                         height=height,
+                        streams=[
+                            VideoStream(urls=[live_photo["videoUrl"]], width=width, height=height),
+                            ImageStream(urls=[pic_url], width=width, height=height),
+                        ],
                     )
                 )
             else:
                 media_list.append(
                     ParserMediaInfo(
-                        url=pic_url,
+                        source_key=source_key_from_url(pic_url),
                         type=MediaType.IMAGE,
                         width=width,
                         height=height,
+                        streams=[ImageStream(urls=[pic_url], width=width, height=height)],
                     )
                 )
 
         video = post.get("video")
         if video and video_url:
             cover = (video.get("image") or {}).get("picUrl")
+            streams: list = [
+                VideoStream(urls=[video_url], width=video.get("width"), height=video.get("height")),
+            ]
+            if cover:
+                streams.append(CoverStream(urls=[cover]))
             media_list.append(
                 ParserMediaInfo(
-                    url=video_url,
+                    source_key=source_key_from_url(video_url),
                     type=MediaType.VIDEO,
-                    cover=cover or None,
                     duration=video.get("duration"),
                     width=video.get("width"),
                     height=video.get("height"),
+                    streams=streams,
                 )
             )
 
         link_info = post.get("linkInfo")
         if link_info and link_info.get("linkUrl"):
+            streams = [LinkStream(urls=[link_info["linkUrl"]])]
+            picture = link_info.get("pictureUrl")
+            if picture:
+                streams.append(CoverStream(urls=[picture]))
             media_list.append(
                 ParserMediaInfo(
-                    url=link_info["linkUrl"],
+                    source_key=source_key_from_url(link_info["linkUrl"]),
                     type=MediaType.LINK,
                     title=link_info.get("title"),
-                    cover=link_info.get("pictureUrl"),
+                    streams=streams,
                 )
             )
 
